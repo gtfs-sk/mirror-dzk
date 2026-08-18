@@ -58,6 +58,11 @@ jobs:
           cp fragment/gtfs.zip public/gtfs.zip
           echo -n "${{ steps.check_hash.outputs.hash }}" > fragment/hash
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.2
+
       - name: Make HTML page
         if: steps.check_hash.outputs.changed == 'true'
         run: bunx gtfs-to-html --configPath ./keep/gtfs-to-html.config.json
