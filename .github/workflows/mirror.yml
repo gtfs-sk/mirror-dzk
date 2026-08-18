@@ -56,7 +56,7 @@ jobs:
         run: |
           mkdir -p public
           cp fragment/gtfs.zip public/gtfs.zip
-          echo -n "${{ steps.check_hash.outputs.hash }}" > fragment/hash
+          echo -n "${{ steps.check_hash.outputs.hash }}" > public/hash
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
