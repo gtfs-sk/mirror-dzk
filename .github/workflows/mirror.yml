@@ -58,9 +58,9 @@ jobs:
           cp fragment/gtfs.zip public/gtfs.zip
           echo -n "${{ steps.check_hash.outputs.hash }}" > fragment/hash
 
-#     - name: Make HTML page
-#       if: steps.check_hash.outputs.changed == 'true'
-#       run: bunx gtfs-to-html --configPath ./keep/gtfs-to-html.config.json
+      - name: Make HTML page
+        if: steps.check_hash.outputs.changed == 'true'
+        run: bunx gtfs-to-html --configPath ./keep/gtfs-to-html.config.json
 
       - name: Upload feed artifact
         if: steps.check_hash.outputs.changed == 'true'
