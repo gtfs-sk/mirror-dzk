@@ -1,0 +1,96 @@
+name: "Mirror GTFS Feed"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs "at minute 1 past midnight" (see https://crontab.guru)
+    - cron: '1 0 * * *'
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check_hash.outputs.changed }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if source feed changed
+        id: check_hash
+        run: |
+          SITE_URL="https://www.detskazeleznica.sk/gtfs-license"
+          SITE_FILE_LOCATION="$(curl -s "$SITE_URL" | sed -nE 's/.*href="([^"]+\.zip)".*/\1/p' | head -n 1)"
+          SOURCE_URL="https://www.detskazeleznica.sk/$SITE_FILE_LOCATION"
+
+          mkdir -p fragment
+          curl -sL "$SOURCE_URL" > fragment/gtfs.zip
+
+          CURRENT_HASH="$(cat fragment/gtfs.zip | sha256sum | cut -d' ' -f1)"
+          echo "Current source hash: $CURRENT_HASH"
+
+          PUBLISHED_HASH="$(curl -sfL https://github.gtfs.sk/mirror-dzk/hash || true)"
+          echo "Published hash: $PUBLISHED_HASH"
+
+          echo "hash=$CURRENT_HASH" >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT_HASH" != "$PUBLISHED_HASH" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Source feed changed (or manual run) - rebuilding."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Source feed unchanged - skipping rebuild."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare the GTFS feed
+        if: steps.check_hash.outputs.changed == 'true'
+        run: |
+          mkdir -p public
+          cp fragment/gtfs.zip public/gtfs.zip
+          echo -n "${{ steps.check_hash.outputs.hash }}" > fragment/hash
+
+#     - name: Make HTML page
+#       if: steps.check_hash.outputs.changed == 'true'
+#       run: bunx gtfs-to-html --configPath ./keep/gtfs-to-html.config.json
+
+      - name: Upload feed artifact
+        if: steps.check_hash.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtfs-feed
+          path: public
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.changed == 'true'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download feed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gtfs-feed
+          path: fragment
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'fragment'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
